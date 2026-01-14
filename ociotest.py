@@ -4,6 +4,8 @@ import pytest
 import re
 
 testoutputdir = "./output"
+if not os.path.exists(testoutputdir):
+    os.makedirs(testoutputdir)
 
 PSNR_RESULTS = []
 
@@ -134,7 +136,7 @@ def psnr_comparison(file1, file2, max_psnr_allowed, testname, log_file=None):
     ("dpx16simpleocean", "sourcemedia/ocean_clean_16_ACEScct.dpx", "tif", "sourcemedia/simpleconfig.ocio", "Linear", "Gamma2.2", "rgb48", 100.0),
     ("dpx16simpleocean2", "sourcemedia/ocean_clean_16_ACEScct.dpx", "tif", "sourcemedia/simpleconfig.ocio", "Linear", "TestCDL", "rgb48", 100.0),
     ("dpx16simpleocean3", "sourcemedia/ocean_clean_16_ACEScct.dpx", "tif", "sourcemedia/simpleconfig.ocio", "Linear", "TestCDL2", "rgb48", 100.0),
-    ("png16simple", "/Users/sam/git/EncodingGuidelines/sourceimages/chip-chart-1080-16bit-noicc.png", "tif", "sourcemedia/simpleconfig.ocio", "Linear", "TestCDL", "rgba64", 100.0),
+    #("png16simple", "/Users/sam/git/EncodingGuidelines/sourceimages/chip-chart-1080-16bit-noicc.png", "tif", "sourcemedia/simpleconfig.ocio", "Linear", "TestCDL", "rgba64", 100.0),
     ("dpx16simple", "sourcemedia/chip-chart-1080-16bit-noicc.dpx", "tif", "sourcemedia/simpleconfig.ocio", "Linear", "TestCDL", "rgb48", 100.0),
     ("dpx16simple2", "sourcemedia/chip-chart-1080-16bit-noicc.dpx", "tif", "sourcemedia/simpleconfig.ocio", "Linear", "TestCDL2", "rgb48", 100.0),
     ## Add more parameter sets as needed
