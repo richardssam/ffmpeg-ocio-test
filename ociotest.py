@@ -182,6 +182,57 @@ def test_ocio_colorspace_vs_oiiotool(testname, input_file, outputext, ocio_confi
 
 
 
+@pytest.mark.parametrize("testname, input_file, outputext, ocio_config, input_space, display, view, format, min_psnr", [
+    ("exr16rgb24", "sourcemedia/ocean_clean_16.exr", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb24", 52.0),
+    ("exr16rgb48", "sourcemedia/ocean_clean_16.exr", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 100.0),
+    #("exr16", "sourcemedia/ocean_clean_16.exr", "exr", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "gbrapf32le", 100.0),
+    ("exr32rgb48", "sourcemedia/ocean_clean_32.exr", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 100.0),
+    ("exr32exr32", "sourcemedia/ocean_clean_32.exr", "exr", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "gbrpf32le", 100.0),
+    #("exr32rgb48le", "sourcemedia/ocean_clean_32.exr", "exr", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "gbrapf32le", 100.0),
+    ("dpx10rgb48le", "sourcemedia/ocean_clean_10_ACEScct.dpx", "tif","sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 95.0),
+    ("dpx12rgb48le", "sourcemedia/ocean_clean_12_ACEScct.dpx", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 95.0),
+    ("dpx16rgb48le", "sourcemedia/ocean_clean_16_ACEScct.dpx", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 100.0),
+    # Add more parameter sets as needed
+])
+def test_ocio_vs_oiiotool(testname, input_file, outputext, ocio_config, input_space, display, view, format, min_psnr):
+    """Compare OpenColorIO color transformations between FFmpeg and oiiotool."""
+    oiiotool_out = os.path.join(testoutputdir, f"{testname}_oiiotool_{format}.{outputext}")
+    ffmpeg_out = os.path.join(testoutputdir, f"{testname}_ffmpeg_{format}.{outputext}")
+    log_file = os.path.join(testoutputdir, f"{testname}_{format}_display.log")
+
+    # Clear log file
+    with open(log_file, "w") as f:
+        f.write(f"Test: {testname}\nFormat: {format}\n\n")
+
+    if format in ("rgb48", "rgba64"):
+        oiioformat = "uint16"
+    elif format in ("gbrpf16le", "gbrapf16le"):
+        oiioformat = "half"
+    elif format in ("gbrpf32le", "gbrapf32le"):
+        oiioformat = "float"
+    else:
+        oiioformat = "uint8"
+
+    # oiiotool command
+    oiiotool_cmd = (
+        f"oiiotool {input_file} "
+        f"--colorconfig {ocio_config} "
+        f"--iscolorspace '{input_space}' "
+        f"--ociodisplay '{display}' '{view}' "
+        f"-d {oiioformat} "
+        f"-o {oiiotool_out}"
+    )
+    run_cmd(oiiotool_cmd, log_file)
+
+    # ffmpeg command
+    ffmpeg_cmd = (
+        f"ffmpeg -y -i {input_file}  -sws_dither none "
+        f"-vf \"ocio=config={ocio_config}:input={input_space}:display={display}:view={view}:format={format}\" "
+        f"{ffmpeg_out}"
+    )
+    run_cmd(ffmpeg_cmd, log_file)
+
+    psnr_comparison(oiiotool_out, ffmpeg_out, max_psnr_allowed=min_psnr, testname=testname, log_file=log_file)
 
 @pytest.mark.parametrize("testname, input_file, outputext, ocio_config, input_space, display, view, format, min_psnr", [
     #("exr32rgb48le", "sourcemedia/ocean_clean_32.exr", "exr", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "gbrapf32le", 100.0),
