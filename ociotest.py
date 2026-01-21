@@ -184,18 +184,13 @@ def test_ocio_colorspace_vs_oiiotool(testname, input_file, outputext, ocio_confi
 
 
 @pytest.mark.parametrize("testname, input_file, outputext, ocio_config, input_space, display, view, format, min_psnr", [
-    ("exr16rgb24", "sourcemedia/ocean_clean_16.exr", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb24", 52.0),
-    ("exr16rgb48", "sourcemedia/ocean_clean_16.exr", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 100.0),
-    #("exr16", "sourcemedia/ocean_clean_16.exr", "exr", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "gbrapf32le", 100.0),
-    ("exr32rgb48", "sourcemedia/ocean_clean_32.exr", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 100.0),
-    ("exr32exr32", "sourcemedia/ocean_clean_32.exr", "exr", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "gbrpf32le", 100.0),
     #("exr32rgb48le", "sourcemedia/ocean_clean_32.exr", "exr", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "gbrapf32le", 100.0),
-    ("dpx10rgb48le", "sourcemedia/ocean_clean_10_ACEScct.dpx", "tif","sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 95.0),
-    ("dpx12rgb48le", "sourcemedia/ocean_clean_12_ACEScct.dpx", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 95.0),
-    ("dpx16rgb48le", "sourcemedia/ocean_clean_16_ACEScct.dpx", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 100.0),
+    ("dpx10rgb48leinvert", "sourcemedia/ocean_clean_10_ACEScct.dpx", "tif","sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 95.0),
+    ("dpx12rgb48leinvert", "sourcemedia/ocean_clean_12_ACEScct.dpx", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 95.0),
+    ("dpx16rgb48leinvert", "sourcemedia/ocean_clean_16_ACEScct.dpx", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", 100.0),
     # Add more parameter sets as needed
 ])
-def test_ocio_vs_oiiotool(testname, input_file, outputext, ocio_config, input_space, display, view, format, min_psnr):
+def test_ocio_invert_vs_oiiotool(testname, input_file, outputext, ocio_config, input_space, display, view, format, min_psnr):
     """Compare OpenColorIO color transformations between FFmpeg and oiiotool."""
     oiiotool_out = os.path.join(testoutputdir, f"{testname}_oiiotool_{format}.{outputext}")
     ffmpeg_out = os.path.join(testoutputdir, f"{testname}_ffmpeg_{format}.{outputext}")
@@ -219,7 +214,7 @@ def test_ocio_vs_oiiotool(testname, input_file, outputext, ocio_config, input_sp
         f"oiiotool {input_file} "
         f"--colorconfig {ocio_config} "
         f"--iscolorspace '{input_space}' "
-        f"--ociodisplay '{display}' '{view}' "
+        f"--ociodisplay:inverse=1 '{display}' '{view}' "
         f"-d {oiioformat} "
         f"-o {oiiotool_out}"
     )
@@ -228,7 +223,7 @@ def test_ocio_vs_oiiotool(testname, input_file, outputext, ocio_config, input_sp
     # ffmpeg command
     ffmpeg_cmd = (
         f"ffmpeg -y -i {input_file}  -sws_dither none "
-        f"-vf \"ocio=config={ocio_config}:input={input_space}:display={display}:view={view}:format={format}\" "
+        f"-vf \"ocio=config={ocio_config}:input={input_space}:display={display}:view={view}:inverse=1:format={format}\" "
         f"{ffmpeg_out}"
     )
     run_cmd(ffmpeg_cmd, log_file)
