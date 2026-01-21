@@ -76,7 +76,7 @@ if not os.path.exists(testoutputdir):
     os.makedirs(testoutputdir)
 
 t = time.time()
-cmd = f"oiiotool -v --framepadding 5 --frames 6100-6299 {source_exrs} --iscolorspace \"ACEScg\" --ociodisplay \"Rec.2100-PQ - Display\" \"ACES 1.1 - HDR Video (1000 nits & Rec.2020 lim)\" -d uint16 -o {testoutputdir}/sparks2_pq1000.#.png"
+cmd = f"oiiotool -v --framepadding 5 --parallel-frames --frames 6100-6299 {source_exrs} --iscolorspace \"ACEScg\" --ociodisplay \"Rec.2100-PQ - Display\" \"ACES 1.1 - HDR Video (1000 nits & Rec.2020 lim)\" -d uint16 -o {testoutputdir}/sparks2_pq1000.#.png"
 run_cmd(cmd)
 
 ffmpegcmd = "ffmpeg -y -framerate 24 -start_number 6100 -i {}/sparks2_pq1000.%05d.png -c:v prores_ks -pix_fmt yuv422p10le -profile:v 3 -vendor apl0 -vf \"scale=in_range=full:in_color_matrix=bt2020:out_range=tv:out_color_matrix=bt2020\" -color_range tv -color_trc smpte2084 -color_primaries bt2020 -colorspace bt2020nc {}/sparks2_pq1000_prores10bit.mov".format(testoutputdir, testoutputdir)
