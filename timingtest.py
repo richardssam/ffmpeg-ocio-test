@@ -69,9 +69,16 @@ def run_cmd(cmd, log_file=None):
 
 
 source_exrs = "/Users/sam/git/EncodingGuidelines/enctests/sources/hdr_sources/sparks/SPARKS_ACES_#.exr"
+source_exrs = "/Users/sam/git/ffmpeg-ocio-test/hdtest/sparks.#.exr"
 #source_exrs = "test_frames/frame.#.exr"
 testoutputdir = "./outputtimingtest"
 logfile = "timing_test_log.txt"
+
+codec_params = "-c:v prores_ks -pix_fmt yuv422p10le -profile:v 3 -vendor apl0" 
+codec_params = "-c:v libx265 -pix_fmt yuv444p10le -x265-params lossless=1"
+codec_params = "-c:v ffv1 -pix_fmt yuv444p10le"
+
+ffmpeg_threads = [ 1,2,4, 6, 8]
 
 if not os.path.exists(testoutputdir):
     os.makedirs(testoutputdir)
@@ -82,7 +89,7 @@ run_cmd(cmd)
 oiiotool_elapsed = time.time() - t
 
 t1 = time.time()
-ffmpegcmd = "ffmpeg -y -framerate 24 -start_number 6100 -i {}/sparks2_pq1000.%05d.png -c:v prores_ks -pix_fmt yuv422p10le -profile:v 3 -vendor apl0 -vf \"scale=in_range=full:in_color_matrix=bt2020:out_range=tv:out_color_matrix=bt2020\" -color_range tv -color_trc smpte2084 -color_primaries bt2020 -colorspace bt2020nc {}/sparks2_pq1000_prores10bit.mov".format(testoutputdir, testoutputdir)
+ffmpegcmd = f"ffmpeg -y -framerate 24 -start_number 6100 -i {testoutputdir}/sparks2_pq1000.%05d.png {codec_params} -vf \"scale=in_range=full:in_color_matrix=bt2020:out_range=tv:out_color_matrix=bt2020\" -color_range tv -color_trc smpte2084 -color_primaries bt2020 -colorspace bt2020nc {testoutputdir}/sparks2_pq1000_prores10bit.mov"
 run_cmd(ffmpegcmd)
 basic_ffmpeg_elapsed = time.time() - t1
 
@@ -91,12 +98,12 @@ elapsed = time.time() - t
 
 thread_timing = {}
 
-for threads in [1,2,4]:
+for threads in ffmpeg_threads:
     t = time.time()
 
     ffmpeg_source = source_exrs.replace("#", "%05d")
 
-    ffmpegcmd = f"ffmpeg -y -framerate 24 -start_number 6100 -i {ffmpeg_source} -c:v prores_ks -pix_fmt yuv422p10le -profile:v 3 -vendor apl0 -vf \"ocio=input=ACEScg:display=Rec.2100-PQ - Display:view=ACES 1.1 - HDR Video (1000 nits & Rec.2020 lim):format=rgb48:threads={threads},scale=in_range=full:in_color_matrix=bt2020:out_range=tv:out_color_matrix=bt2020\" -color_range tv -color_trc smpte2084 -color_primaries bt2020 -colorspace bt2020nc {testoutputdir}/sparks2_pq1000_prores10bit_threads{threads}.mov"
+    ffmpegcmd = f"ffmpeg -y -framerate 24 -start_number 6100 -i {ffmpeg_source} {codec_params} -vf \"ocio=input=ACEScg:display=Rec.2100-PQ - Display:view=ACES 1.1 - HDR Video (1000 nits & Rec.2020 lim):format=rgb48:threads={threads},scale=in_range=full:in_color_matrix=bt2020:out_range=tv:out_color_matrix=bt2020\" -color_range tv -color_trc smpte2084 -color_primaries bt2020 -colorspace bt2020nc {testoutputdir}/sparks2_pq1000_prores10bit_threads{threads}.mov"
     run_cmd(ffmpegcmd)
 
     ffmpeg_elapsed = time.time() - t
