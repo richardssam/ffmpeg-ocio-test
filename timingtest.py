@@ -7,6 +7,18 @@ import io
 
 os.environ["OCIO"] = "ocio://studio-config-v1.0.0_aces-v1.3_ocio-v2.1"
 
+# Specify the location of the source EXR files and output directory
+# This example uses the SPARKS ACES EXR sequence there is a download script in the
+# Encoding Guidelines repository - https://github.com/AcademySoftwareFoundation/EncodingGuidelines
+source_exrs = "/Users/sam/git/EncodingGuidelines/enctests/sources/hdr_sources/sparks/SPARKS_ACES_#.exr"
+testoutputdir = "./outputtimingtest"
+logfile = "timing_test_log.txt"
+
+#codec_params = "-c:v prores_ks -pix_fmt yuv422p10le -profile:v 3 -vendor apl0" 
+#codec_params = "-c:v libx265 -pix_fmt yuv444p10le -x265-params lossless=1"
+codec_params = "-c:v ffv1 -pix_fmt yuv444p10le"
+
+ffmpeg_threads = [ 1,2,4, 6, 8]
 def run_cmd(cmd, log_file=None):
     msg = f"Running command: {cmd}\n"
     print(msg, file=os.sys.stderr)
@@ -68,17 +80,6 @@ def run_cmd(cmd, log_file=None):
     return subprocess.CompletedProcess(args=cmd, returncode=returncode, stdout=stdout_buf.getvalue().encode(), stderr=stderr_buf.getvalue().encode())
 
 
-source_exrs = "/Users/sam/git/EncodingGuidelines/enctests/sources/hdr_sources/sparks/SPARKS_ACES_#.exr"
-source_exrs = "/Users/sam/git/ffmpeg-ocio-test/hdtest/sparks.#.exr"
-#source_exrs = "test_frames/frame.#.exr"
-testoutputdir = "./outputtimingtest"
-logfile = "timing_test_log.txt"
-
-codec_params = "-c:v prores_ks -pix_fmt yuv422p10le -profile:v 3 -vendor apl0" 
-codec_params = "-c:v libx265 -pix_fmt yuv444p10le -x265-params lossless=1"
-codec_params = "-c:v ffv1 -pix_fmt yuv444p10le"
-
-ffmpeg_threads = [ 1,2,4, 6, 8]
 
 if not os.path.exists(testoutputdir):
     os.makedirs(testoutputdir)
