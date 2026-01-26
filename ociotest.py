@@ -8,17 +8,10 @@ if not os.path.exists(testoutputdir):
     os.makedirs(testoutputdir)
 
 PSNR_RESULTS = []
+FFMPEG_BIN = "/Users/sam/roots/ffmpeg-ocio-8.0/bin/ffmpeg"
 
-@pytest.fixture(scope="session", autouse=True)
-def print_psnr_summary():
-    yield
-    print("\n\n" + "=" * 80)
-    print(f"{'Test':<20} | {'FFmpeg Output File':<50} | {'PSNR':<8} | {'Min PSNR':<8} | {'Status'}")
-    print("-" * 100)
-    for res in PSNR_RESULTS:
-        status = "PASS" if res['passed'] else "FAIL"
-        print(f"{res['test']:<20} | {res['file']:<50} | {res['psnr']:>8.2f} | {res['min_psnr']:>8.2f} | {status}")
-    print("=" * 80 + "\n")
+import sys
+
 
 def run_cmd(cmd, log_file=None):
     msg = f"Running command: {cmd}\n"
@@ -53,11 +46,11 @@ def psnr_comparison(file1, file2, max_psnr_allowed, testname, log_file=None):
         with open(log_file, "a") as f:
             f.write(msg)
 
-    ffmpeg_path = "ffmpeg" # Use the hardcoded FFmpeg path from other tests
     ffmpeg_cmd_str = (            
-        f"{ffmpeg_path} -i {file1} -i {file2} "
+        f"{FFMPEG_BIN} -i {file1} -i {file2} "
         f"-filter_complex \"[0:v][1:v]psnr\" -f null -"
     )
+
 
     msg = f"Running command: {ffmpeg_cmd_str}\n"
     print(msg, file=os.sys.stderr)
@@ -172,7 +165,7 @@ def test_ocio_colorspace_vs_oiiotool(testname, input_file, outputext, ocio_confi
 
     # ffmpeg command
     ffmpeg_cmd = (
-        f"ffmpeg -y -i {input_file} -sws_dither none "
+        f"{FFMPEG_BIN} -y -i {input_file} -sws_dither none "
         f"-vf \"ocio=config={ocio_config}:input={input_space}:output={output_space}:format={format}\" "
         f"{ffmpeg_out}"
     )
@@ -226,7 +219,7 @@ def test_ocio_vs_oiiotool(testname, input_file, outputext, ocio_config, input_sp
 
     # ffmpeg command
     ffmpeg_cmd = (
-        f"ffmpeg -y -i {input_file}  -sws_dither none "
+        f"{FFMPEG_BIN} -y -i {input_file}  -sws_dither none "
         f"-vf \"ocio=config={ocio_config}:input={input_space}:display={display}:view={view}:format={format}\" "
         f"{ffmpeg_out}"
     )
@@ -273,7 +266,7 @@ def test_ocio_invert_vs_oiiotool(testname, input_file, outputext, ocio_config, i
 
     # ffmpeg command
     ffmpeg_cmd = (
-        f"ffmpeg -y -i {input_file}  -sws_dither none "
+        f"{FFMPEG_BIN} -y -i {input_file}  -sws_dither none "
         f"-vf \"ocio=config={ocio_config}:input={input_space}:display={display}:view={view}:inverse=1:format={format}\" "
         f"{ffmpeg_out}"
     )
@@ -281,63 +274,87 @@ def test_ocio_invert_vs_oiiotool(testname, input_file, outputext, ocio_config, i
 
     psnr_comparison(oiiotool_out, ffmpeg_out, max_psnr_allowed=min_psnr, testname=testname, log_file=log_file)
 
-
-@pytest.mark.parametrize("testname, input_file, outputext, ocio_config, input_space, display, view, format, contextdict, min_psnr", [
-    #("exr32rgb48le", "sourcemedia/ocean_clean_32.exr", "exr", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScg", "sRGB - Display", "ACES 1.0 - SDR Video", "gbrapf32le", 100.0),
-    ("dpx10rgb48leinvert", "sourcemedia/ocean_clean_10_ACEScct.dpx", "tif","sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", {'SHOT': '100'}, 95.0),
-    ("dpx12rgb48leinvert", "sourcemedia/ocean_clean_12_ACEScct.dpx", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", {'SHOT': '120'}, 95.0),
-    ("dpx16rgb48leinvert", "sourcemedia/ocean_clean_16_ACEScct.dpx", "tif", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio", "ACEScct", "sRGB - Display", "ACES 1.0 - SDR Video", "rgb48", {'SHOT': '160'}, 100.0),
-    # Add more parameter sets as needed
+# This is the most generic test, it should work for any types of arguments
+@pytest.mark.parametrize("testname, input_file, outputext, ocio_params, ffmpeg_params, min_psnr", [
+    ("dpx10rgb48leinvert", "sourcemedia/ocean_clean_10_ACEScct.dpx", "tif", 
+     [
+         "--colorconfig", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio",
+         "--iscolorspace", "ACEScct",
+         "--ociodisplay:key=SHOT:value=100", "'sRGB - Display'", "'ACES 1.0 - SDR Video'",
+         "-d", "uint16"
+     ],
+     [
+         "-sws_dither", "none",
+         "-pix_fmt", "rgb48le",
+         "-vf", "\"ocio=config=sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio:input=ACEScct:display=sRGB - Display:view=ACES 1.0 - SDR Video:context_params='SHOT=100':format=rgb48\""
+     ], 
+     95.0),
+    ("dpx12rgb48leinvert", "sourcemedia/ocean_clean_12_ACEScct.dpx", "tif", 
+     [
+         "--colorconfig", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio",
+         "--iscolorspace", "ACEScct",
+         "--ociodisplay:key=SHOT:value=120", "'sRGB - Display'", "'ACES 1.0 - SDR Video'",
+         "-d", "uint16"
+     ],
+     [
+         "-sws_dither", "none",
+         "-pix_fmt", "rgb48le",
+         "-vf", "\"ocio=config=sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio:input=ACEScct:display=sRGB - Display:view=ACES 1.0 - SDR Video:context_params='SHOT=120':format=rgb48\""
+     ],
+     95.0),
+    ("dpx16rgb48leinvert", "sourcemedia/ocean_clean_16_ACEScct.dpx", "tif", 
+     [
+         "--colorconfig", "sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio",
+         "--iscolorspace", "ACEScct",
+         "--ociodisplay:key=SHOT:value=160", "'sRGB - Display'", "'ACES 1.0 - SDR Video'",
+         "-d", "uint16"
+     ],
+     [
+         "-sws_dither", "none",
+         "-pix_fmt", "rgb48le",
+         "-vf", "\"ocio=config=sourcemedia/studio-config-v1.0.0_aces-v1.3_ocio-v2.1_ns.ocio:input=ACEScct:display=sRGB - Display:view=ACES 1.0 - SDR Video:context_params='SHOT=160':format=rgb48\""
+     ],
+     100.0),
+     ("dpx16rgb48leFileTransform", "sourcemedia/ocean_clean_16_ACEScct.dpx", "tif", 
+     [
+         "--ociofiletransform", "sourcemedia/redcontrast.spi1d",
+         "-d", "uint16"
+     ],
+     [
+         "-sws_dither", "none",
+         "-pix_fmt", "rgb48le",
+         "-vf", "ocio=filetransform=sourcemedia/redcontrast.spi1d:format=rgb48"
+     ],
+     100.0),
 ])
-def test_ocio_context_vs_oiiotool(testname, input_file, outputext, ocio_config, input_space, display, view, format, contextdict, min_psnr):
+def test_ocio_args_vs_oiiotool(testname, input_file, outputext, ocio_params, ffmpeg_params, min_psnr):
     """Compare OpenColorIO color transformations between FFmpeg and oiiotool."""
-    oiiotool_out = os.path.join(testoutputdir, f"{testname}_oiiotool_{format}.{outputext}")
-    ffmpeg_out = os.path.join(testoutputdir, f"{testname}_ffmpeg_{format}.{outputext}")
-    log_file = os.path.join(testoutputdir, f"{testname}_{format}_display.log")
-
-
-    context = []
-    ffmpeg_context = []
-    for key, value in contextdict.items():
-        context.append(f"key={key}:value={value}")
-        ffmpeg_context.append(f"{key}={value}")
-    context_str = ":".join(context)
-    ffmpeg_context_str = "\\:".join(ffmpeg_context)
+    
+    oiiotool_out = os.path.join(testoutputdir, f"{testname}_oiiotool.{outputext}")
+    ffmpeg_out = os.path.join(testoutputdir, f"{testname}_ffmpeg.{outputext}")
+    log_file = os.path.join(testoutputdir, f"{testname}_display.log")
 
     # Clear log file
     with open(log_file, "w") as f:
-        f.write(f"Test: {testname}\nFormat: {format}\n\n")
-
-    if format in ("rgb48", "rgba64"):
-        oiioformat = "uint16"
-    elif format in ("gbrpf16le", "gbrapf16le"):
-        oiioformat = "half"
-    elif format in ("gbrpf32le", "gbrapf32le"):
-        oiioformat = "float"
-    else:
-        oiioformat = "uint8"
+        f.write(f"Test: {testname}\n\n")
 
     # oiiotool command
     oiiotool_cmd = (
         f"oiiotool {input_file} "
-        f"--colorconfig {ocio_config} "
-        f"--iscolorspace '{input_space}' "
-        f"--ociodisplay:{   context_str} '{display}' '{view}' "
-        f"-d {oiioformat} "
+        f"{' '.join(ocio_params)} "
         f"-o {oiiotool_out}"
     )
     run_cmd(oiiotool_cmd, log_file)
 
     # ffmpeg command
     ffmpeg_cmd = (
-        f"ffmpeg -y -i {input_file}  -sws_dither none "
-        f"-vf \"ocio=config={ocio_config}:input={input_space}:display={display}:view={view}:context_params=\'{ffmpeg_context_str}\':format={format}\" "
+        f"{FFMPEG_BIN} -y -i {input_file} "
+        f"{' '.join(ffmpeg_params)} "
         f"{ffmpeg_out}"
     )
     run_cmd(ffmpeg_cmd, log_file)
 
     psnr_comparison(oiiotool_out, ffmpeg_out, max_psnr_allowed=min_psnr, testname=testname, log_file=log_file)
-
 
 
 @pytest.mark.parametrize("testname, input_file, outputext, ocio_config, input_space, display, view, format, out_format, min_psnr, compression, yuvoutputext", [
@@ -388,7 +405,7 @@ def test_ocio_vs_oiiotool_2_yuv444(testname, input_file, outputext, ocio_config,
 
     # ffmpeg command
     ffmpeg_cmd = (
-        f"ffmpeg -y -i {input_file} "
+        f"{FFMPEG_BIN} -y -i {input_file} "
         f"-vf \"ocio=config={ocio_config}:input={input_space}:display={display}:view={view}:format={format},{yuvconvert}format={out_format}\" "
         f" -strict -1 {compression} "
         f"{ffmpeg_out}"
@@ -411,7 +428,7 @@ def test_ocio_vs_oiiotool_2_yuv444(testname, input_file, outputext, ocio_config,
         yuvconvert = f" -vf {yuvconvert[0:-1]} "
 
     ffmpeg_oiio_cmd = (
-        f"ffmpeg -y -i {oiiotool_out} "
+        f"{FFMPEG_BIN} -y -i {oiiotool_out} "
         f"-pix_fmt {out_format} {yuvconvert} {compression} -strict -1 "
         f"{yuv_oiiotool_out}"
     )
@@ -422,5 +439,5 @@ def test_ocio_vs_oiiotool_2_yuv444(testname, input_file, outputext, ocio_config,
 
 if __name__ == "__main__":
     import sys
-    sys.exit(pytest.main([__file__]))
+    sys.exit(pytest.main([__file__, "-s"]))
 
