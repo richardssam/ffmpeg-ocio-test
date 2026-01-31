@@ -15,10 +15,11 @@ testoutputdir = "./outputtimingtest"
 logfile = "timing_test_log.txt"
 
 #codec_params = "-c:v prores_ks -pix_fmt yuv422p10le -profile:v 3 -vendor apl0" 
+codec_params = "-c:v prores_videotoolbox -profile:v 3 -pix_fmt yuv422p10le -vendor apl0" 
 #codec_params = "-c:v libx265 -pix_fmt yuv444p10le -x265-params lossless=1"
-codec_params = "-c:v ffv1 -pix_fmt yuv444p10le"
+#codec_params = "-c:v ffv1 -pix_fmt yuv444p10le"
 
-ffmpeg_threads = [ 1,2,4, 6, 8]
+ffmpeg_threads = [ 4 ] #1,2,4, 6, 8]
 def run_cmd(cmd, log_file=None):
     msg = f"Running command: {cmd}\n"
     print(msg, file=os.sys.stderr)
