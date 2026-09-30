@@ -40,6 +40,44 @@ def _raw_source(name, pixel, count=16):
     return path
 
 
+# A config whose only transform computes R' = R + 0.25 * A and A' = 0.5 * A.
+# It is exact in floating point, so it does not depend on the OCIO version,
+# and it detects both alpha-dependent RGB and transform-produced alpha.
+ALPHA_CONFIG = """ocio_profile_version: 2
+roles: {default: linear}
+colorspaces:
+  - !<ColorSpace> {name: linear, bitdepth: 32f}
+  - !<ColorSpace>
+    name: alpha_test
+    bitdepth: 32f
+    from_reference: !<MatrixTransform>
+      matrix: [1, 0, 0, 0.25, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0.5]
+"""
+
+
+def _alpha_config():
+    path = os.path.join(testoutputdir, "negotiation_alpha.ocio")
+    with open(path, "w") as handle:
+        handle.write(ALPHA_CONFIG)
+    return path
+
+
+def _float_source(name, rgb=(0.25, 0.5, 0.75), count=16):
+    """Write a 4x4 gbrpf32le frame (planes are G, B, R)."""
+    path = os.path.join(testoutputdir, name)
+    planes = [rgb[1]] * count + [rgb[2]] * count + [rgb[0]] * count
+    with open(path, "wb") as handle:
+        handle.write(struct.pack("<%df" % len(planes), *planes))
+    return path
+
+
+def planar_rgba(path, count=16):
+    """Return (R, G, B, A) of the first pixel of a planar float frame."""
+    values = struct.unpack("<%df" % (os.path.getsize(path) // 4),
+                           open(path, "rb").read())
+    return (values[2 * count], values[0], values[count], values[3 * count])
+
+
 def run_ffmpeg(args, log_file=None, expect_success=True):
     """Run FFMPEG_BIN with args (a list) and return the CompletedProcess."""
     cmd = [FFMPEG_BIN, "-hide_banner", "-nostdin", "-y"] + args
@@ -290,3 +328,74 @@ def test_half_float_values_survive_the_filter():
     )
     report = diff.stdout.decode(errors="replace")
     assert "PASS" in report, report
+
+
+# --------------------------------------------------------------------------
+# Transforms that use or produce alpha
+# --------------------------------------------------------------------------
+
+def test_transform_receives_opaque_input_alpha():
+    """A transform must see opaque alpha, not zero, for an input without alpha.
+
+    The matrix computes R' = R + 0.25 * A, so R proves what alpha the
+    transform saw, and A' = 0.5 * A proves the transform's alpha survived.
+    Filling alpha after the transform would leave R unchanged and A at 1.0.
+    """
+    source = _float_source("negotiation_rgb_float.raw")
+    config = _alpha_config()
+    out_file = os.path.join(testoutputdir, "negotiation_alpha_matrix.raw")
+    log_file = os.path.join(testoutputdir, "negotiation_alpha_matrix.log")
+
+    run_ffmpeg([
+        "-f", "rawvideo", "-pixel_format", "gbrpf32le", "-video_size", "4x4",
+        "-i", source,
+        "-vf", f"zscale,ocio=config={config}:input=linear:output=alpha_test,"
+               f"format=gbrapf32le",
+        "-frames:v", "1", "-c:v", "rawvideo", "-f", "rawvideo", out_file,
+    ], log_file=log_file)
+
+    rgba = tuple(round(v, 4) for v in planar_rgba(out_file))
+    assert rgba == (0.5, 0.5, 0.75, 0.5), rgba
+
+
+def test_transform_alpha_with_explicit_output_format():
+    """The same via format=, rather than a downstream constraint."""
+    source = _float_source("negotiation_rgb_float.raw")
+    config = _alpha_config()
+    out_file = os.path.join(testoutputdir, "negotiation_alpha_matrix_explicit.raw")
+    log_file = os.path.join(testoutputdir, "negotiation_alpha_matrix_explicit.log")
+
+    run_ffmpeg([
+        "-f", "rawvideo", "-pixel_format", "gbrpf32le", "-video_size", "4x4",
+        "-i", source,
+        "-vf", f"ocio=config={config}:input=linear:output=alpha_test:"
+               f"format=gbrapf32",
+        "-frames:v", "1", "-c:v", "rawvideo", "-f", "rawvideo", out_file,
+    ], log_file=log_file)
+
+    rgba = tuple(round(v, 4) for v in planar_rgba(out_file))
+    assert rgba == (0.5, 0.5, 0.75, 0.5), rgba
+
+
+def test_transform_alpha_preserved_for_rgba_input():
+    """With real input alpha the transform result must use that alpha."""
+    source = _float_source("negotiation_rgba_float.raw")
+    config = _alpha_config()
+    out_file = os.path.join(testoutputdir, "negotiation_alpha_matrix_rgba.raw")
+    log_file = os.path.join(testoutputdir, "negotiation_alpha_matrix_rgba.log")
+
+    # gbrapf32le input: G, B, R, A planes, alpha 0.5
+    with open(source, "ab") as handle:
+        handle.write(struct.pack("<16f", *([0.5] * 16)))
+
+    run_ffmpeg([
+        "-f", "rawvideo", "-pixel_format", "gbrapf32le", "-video_size", "4x4",
+        "-i", source,
+        "-vf", f"ocio=config={config}:input=linear:output=alpha_test:"
+               f"format=gbrapf32",
+        "-frames:v", "1", "-c:v", "rawvideo", "-f", "rawvideo", out_file,
+    ], log_file=log_file)
+
+    # R' = 0.25 + 0.25 * 0.5 = 0.375, A' = 0.5 * 0.5 = 0.25
+    rgba = tuple(round(v, 4) for v in planar_rgba(out_file))
+    assert rgba == (0.375, 0.5, 0.75, 0.25), rgba
