@@ -144,6 +144,49 @@ def test_alpha_mode_conversion_does_not_crash():
     )
 
 
+def test_yuv_input_does_not_crash():
+    """YUV input needs a scaler in front of the filter.
+
+    The graph inserts it while the filter has delayed publishing its output
+    formats, so every attribute list the converter reads must already exist.
+    A missing one (chroma locations, for instance) crashes there.
+    """
+    source = os.path.join(testoutputdir, "negotiation_yuv420p.raw")
+    with open(source, "wb") as handle:
+        handle.write(bytes([128]) * 24)
+    log_file = os.path.join(testoutputdir, "negotiation_yuv.log")
+
+    result = run_ffmpeg([
+        "-f", "rawvideo", "-pixel_format", "yuv420p", "-video_size", "4x4",
+        "-i", source, "-vf", OCIO_IDENTITY,
+        "-frames:v", "1", "-f", "null", "-",
+    ], log_file=log_file, expect_success=False)
+
+    assert result.returncode >= 0, "ffmpeg terminated by a signal (crash)"
+    assert result.returncode == 0, (
+        f"YUV input failed: {result.stderr.decode(errors='replace')[-2000:]}"
+    )
+
+
+@pytest.mark.parametrize("pix_fmt,size", [
+    ("nv12", 24), ("yuv444p", 48), ("yuv422p", 32),
+])
+def test_other_yuv_inputs(pix_fmt, size):
+    source = os.path.join(testoutputdir, f"negotiation_{pix_fmt}.raw")
+    with open(source, "wb") as handle:
+        handle.write(bytes([128]) * size)
+    log_file = os.path.join(testoutputdir, f"negotiation_{pix_fmt}.log")
+
+    result = run_ffmpeg([
+        "-f", "rawvideo", "-pixel_format", pix_fmt, "-video_size", "4x4",
+        "-i", source, "-vf", OCIO_IDENTITY,
+        "-frames:v", "1", "-f", "null", "-",
+    ], log_file=log_file, expect_success=False)
+
+    assert result.returncode >= 0, "ffmpeg terminated by a signal (crash)"
+    assert result.returncode == 0
+
+
 def test_chained_filters_without_auto_conversion():
     """Consecutive ocio filters must agree on a format without a converter.
 
